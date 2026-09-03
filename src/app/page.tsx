@@ -204,8 +204,24 @@ export default function WatermarkRemoverApp() {
     }
   }, [image, mediaType, videoSrc, modelType, videoFastMode]);
 
+  const [isConverting, setIsConverting] = useState(false);
+
   // Download result
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async (asMp4 = false) => {
+    if (processedBlob && mediaType === "video" && asMp4) {
+      setIsConverting(true);
+      try {
+        const { convertWebmToMp4 } = await import("@/lib/processing/fast-inpaint");
+        const mp4Blob = await convertWebmToMp4(processedBlob);
+        downloadBlob(mp4Blob, `watermark-removed-${Date.now()}.mp4`);
+      } catch (e) {
+        console.error("MP4 conversion failed, downloading WebM:", e);
+        downloadBlob(processedBlob, `watermark-removed-${Date.now()}.webm`);
+      } finally {
+        setIsConverting(false);
+      }
+      return;
+    }
     if (processedBlob) {
       const ext = mediaType === "video" ? "webm" : "png";
       downloadBlob(processedBlob, `watermark-removed-${Date.now()}.${ext}`);
@@ -553,13 +569,33 @@ export default function WatermarkRemoverApp() {
               {/* Download Button */}
               {state === "done" && (
                 <>
-                  <button
-                    onClick={handleDownload}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-500/20"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Result
-                  </button>
+                  {mediaType === "video" ? (
+                    <>
+                      <button
+                        onClick={() => handleDownload(false)}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-500/20"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download WebM
+                      </button>
+                      <button
+                        onClick={() => handleDownload(true)}
+                        disabled={isConverting}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 rounded-xl text-sm font-medium text-zinc-300 transition-colors border border-zinc-700"
+                      >
+                        {isConverting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
+                        {isConverting ? "Converting..." : "Download MP4"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => handleDownload(false)}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-500/20"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Result
+                    </button>
+                  )}
                   <button
                     onClick={handleReset}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-medium text-zinc-300 transition-colors"

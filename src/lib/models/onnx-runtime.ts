@@ -2,7 +2,7 @@ import * as ort from "onnxruntime-web";
 
 type ExecutionProvider = "webgpu" | "wasm";
 
-let session: ort.InferenceSession | null = null;
+const sessions: Map<ModelType, ort.InferenceSession> = new Map();
 let currentProvider: ExecutionProvider = "wasm";
 
 const LAMA_MODEL_URL =
@@ -38,7 +38,14 @@ export async function loadModel(
   modelType: ModelType = "lama",
   onProgress?: (progress: number) => void
 ): Promise<ort.InferenceSession> {
-  if (session) return session;
+  const cached = sessions.get(modelType);
+  if (cached) return cached;
+
+  if (typeof window !== "undefined") {
+    try {
+      ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
+    } catch {}
+  }
 
   const config = MODELS[modelType];
   currentProvider = await getAvailableProvider();
@@ -55,11 +62,16 @@ export async function loadModel(
 
   if (typeof caches !== "undefined") {
     try {
-      const cache = await caches.open("watermark-model-v1");
+      const cache = await caches.open("watermark-model-v2");
       const cachedResponse = await cache.match(config.url);
       if (cachedResponse) {
-        modelBuffer = await cachedResponse.arrayBuffer();
-        onProgress?.(100);
+        const buf = await cachedResponse.arrayBuffer();
+        if (buf.byteLength > 1024) {
+          modelBuffer = buf;
+          onProgress?.(100);
+        } else {
+          await cache.delete(config.url);
+        }
       }
     } catch {}
   }
@@ -78,25 +90,38 @@ export async function loadModel(
     const chunks: Uint8Array[] = [];
     let receivedLength = 0;
 
-    while (true) {
-      const { done, value } = await reader!.read();
-      if (done) break;
-      chunks.push(value);
-      receivedLength += value.length;
-
-      if (contentLength > 0) {
-        onProgress?.(Math.round((receivedLength / contentLength) * 100));
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          receivedLength += value.length;
+          if (contentLength > 0) {
+            onProgress?.(Math.round((receivedLength / contentLength) * 100));
+          }
+        }
       }
+      const totalLength = chunks.reduce((acc, val) => acc + val.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+      modelBuffer = combined.buffer;
+    } else {
+      modelBuffer = await response.arrayBuffer();
     }
 
-    modelBuffer = new Uint8Array(
-      chunks.reduce((acc, val) => acc + val.length, 0)
-    ).buffer;
+    if (!modelBuffer || modelBuffer.byteLength < 1024) {
+      throw new Error("Downloaded model is invalid or too small");
+    }
 
     // Cache the model
     if (typeof caches !== "undefined") {
       try {
-        const cache = await caches.open("watermark-model-v1");
+        const cache = await caches.open("watermark-model-v2");
         const blob = new Blob([modelBuffer]);
         await cache.put(config.url, new Response(blob));
       } catch {}
@@ -105,18 +130,36 @@ export async function loadModel(
     onProgress?.(100);
   }
 
-  session = await ort.InferenceSession.create(modelBuffer!, {
-    executionProviders,
-    graphOptimizationLevel: "all",
-  });
+  let newSession: ort.InferenceSession;
+  try {
+    newSession = await ort.InferenceSession.create(modelBuffer!, {
+      executionProviders,
+      graphOptimizationLevel: "all",
+    });
+  } catch (e) {
+    if (typeof caches !== "undefined") {
+      try {
+        const cache = await caches.open("watermark-model-v2");
+        await cache.delete(config.url);
+      } catch {}
+    }
+    throw e;
+  }
 
-  return session;
+  sessions.set(modelType, newSession);
+  return newSession;
 }
 
-export function disposeModel() {
-  if (session) {
-    session.release();
-    session = null;
+export function disposeModel(modelType?: ModelType) {
+  if (modelType) {
+    const s = sessions.get(modelType);
+    if (s) {
+      s.release();
+      sessions.delete(modelType);
+    }
+  } else {
+    for (const s of sessions.values()) s.release();
+    sessions.clear();
   }
 }
 

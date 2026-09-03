@@ -44,7 +44,7 @@ export default function WatermarkRemoverApp() {
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [detectedRegions, setDetectedRegions] = useState<DetectionRegion[]>([]);
   const [processingProgress, setProcessingProgress] = useState({ stage: "", progress: 0 });
-  const [modelType, setModelType] = useState<"lama" | "migan">("lama");
+  const [modelType, setModelType] = useState<"lama" | "migan">("migan");
   const [showSettings, setShowSettings] = useState(false);
   const [hasMask, setHasMask] = useState(false);
 

@@ -508,55 +508,58 @@ export default function WatermarkRemoverApp() {
 
                 {showSettings && (
                   <div className="mt-4 space-y-3">
-                    {mediaType === "video" && (
+                    {mediaType === "video" ? (
                       <div>
                         <label className="text-xs text-zinc-500 mb-2 block">
-                          Video Mode
+                          Video Quality
                         </label>
                         <div className="flex gap-2">
                           <button
                             onClick={() => setVideoFastMode(true)}
-                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
+                            className={`flex-1 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
                               videoFastMode
                                 ? "bg-green-600 text-white"
                                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
                             }`}
                           >
                             Fast
-                            <span className="block text-[10px] opacity-60">10-50x realtime</span>
+                            <span className="block text-[10px] opacity-60 mt-0.5">Telea · realtime</span>
                           </button>
                           <button
                             onClick={() => setVideoFastMode(false)}
-                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
+                            className={`flex-1 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
                               !videoFastMode
                                 ? "bg-blue-600 text-white"
                                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
                             }`}
                           >
                             AI Quality
-                            <span className="block text-[10px] opacity-60">Slower, better</span>
+                            <span className="block text-[10px] opacity-60 mt-0.5">LaMa · slower</span>
                           </button>
                         </div>
+                        <p className="text-[11px] text-zinc-500 mt-2">
+                          {videoFastMode ? "✓ No download, instant" : "Downloads 29MB model"}
+                        </p>
                       </div>
-                    )}
-                    <div>
-                      <label className="text-xs text-zinc-500 mb-2 block">
-                        Image Inpaint
-                      </label>
-                      <div className="flex gap-2 mb-3">
-                        <button
-                          onClick={() => setImageMethod("ai")}
-                          className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${imageMethod === "ai" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
-                        >
-                          AI
-                          <span className="block text-[10px] opacity-60">MI-GAN/LaMa</span>
-                        </button>
-                        <button
-                          onClick={() => setImageMethod("telea")}
-                          className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${imageMethod === "telea" ? "bg-green-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
-                        >
-                          Telea
-                          <span className="block text-[10px] opacity-60">Fast 8MB</span>
+                    ) : (
+                      <div>
+                        <label className="text-xs text-zinc-500 mb-2 block">
+                          Inpaint Mode
+                        </label>
+                        <div className="flex gap-2 mb-3">
+                          <button
+                            onClick={() => setImageMethod("ai")}
+                            className={`flex-1 px-2 py-2.5 rounded-lg text-xs font-medium transition-colors ${imageMethod === "ai" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                          >
+                            AI
+                            <span className="block text-[10px] opacity-60 mt-0.5">LaMa/MI-GAN</span>
+                          </button>
+                          <button
+                            onClick={() => setImageMethod("telea")}
+                            className={`flex-1 px-2 py-2.5 rounded-lg text-xs font-medium transition-colors ${imageMethod === "telea" ? "bg-green-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                          >
+                            Telea
+                            <span className="block text-[10px] opacity-60 mt-0.5">Fast 8MB</span>
                         </button>
                         <button
                           onClick={() => setImageMethod("fast")}
@@ -582,39 +585,9 @@ export default function WatermarkRemoverApp() {
                           </button>
                         </div>
                       )}
-                      <label className="text-xs text-zinc-500 mb-2 block mt-3">
-                        AI Model
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setModelType("lama")}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
-                            modelType === "lama"
-                              ? "bg-blue-600 text-white"
-                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                          }`}
-                        >
-                          LaMa
-                          <span className="block text-[10px] opacity-60">
-                            Higher quality
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => setModelType("migan")}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
-                            modelType === "migan"
-                              ? "bg-blue-600 text-white"
-                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                          }`}
-                        >
-                          MI-GAN
-                          <span className="block text-[10px] opacity-60">
-                            Faster
-                          </span>
-                        </button>
-                      </div>
                     </div>
-                  </div>
+                  )}
+                </div>
                 )}
               </div>
 

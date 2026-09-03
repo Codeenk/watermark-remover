@@ -78,17 +78,30 @@ export async function processVideo(
   const originalWidth = videoElement.videoWidth;
   const originalHeight = videoElement.videoHeight;
 
+  let inpaintWithOpenCV: any = null;
+  if (fastMode) {
+    try {
+      const mod = await import("./opencv-inpaint");
+      inpaintWithOpenCV = mod.inpaintWithOpenCV;
+      onProgress?.("OpenCV ready, processing...", 10);
+    } catch {}
+  }
+
   for (let i = 0; i < frames.length; i++) {
     if (cancelToken?.cancelled) throw new Error("Processing cancelled");
 
     const frameData = frames[i];
 
     if (fastMode) {
-      try {
-        const { inpaintWithOpenCV } = await import("./opencv-inpaint");
-        const inpainted = await inpaintWithOpenCV(frameData, mask, "telea", 7);
-        processedFrames.push(inpainted);
-      } catch {
+      if (inpaintWithOpenCV) {
+        try {
+          const inpainted = await inpaintWithOpenCV(frameData, mask, "telea", 7);
+          processedFrames.push(inpainted);
+        } catch {
+          const inpainted = fastInpaint(frameData, mask);
+          processedFrames.push(inpainted);
+        }
+      } else {
         const inpainted = fastInpaint(frameData, mask);
         processedFrames.push(inpainted);
       }
@@ -112,9 +125,9 @@ export async function processVideo(
       processedFrames.push(composited);
     }
 
-    const progress = 10 + (i / frames.length) * 80;
+    const progress = 10 + ((i + 1) / frames.length) * 80;
     onProgress?.(`Processing frame ${i + 1}/${frames.length}`, progress);
-    if (i % 10 === 0) await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   onProgress?.("Encoding video...", 95);

@@ -119,12 +119,20 @@ export async function processVideo(
   outputCanvas.height = originalHeight;
   const outputCtx = outputCanvas.getContext("2d")!;
 
-  // Use MediaRecorder to encode
   const stream = outputCanvas.captureStream(fps);
   const chunks: Blob[] = [];
 
+  const mimeTypes = [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4",
+  ];
+  let mimeType = mimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  if (!mimeType) throw new Error("No supported video codec found in this browser");
+
   const recorder = new MediaRecorder(stream, {
-    mimeType: "video/webm;codecs=vp9",
+    mimeType,
     videoBitsPerSecond: 8000000,
   });
 
@@ -134,7 +142,7 @@ export async function processVideo(
 
   return new Promise((resolve, reject) => {
     recorder.onstop = () => {
-      resolve(new Blob(chunks, { type: "video/webm" }));
+      resolve(new Blob(chunks, { type: mimeType.split(";")[0] }));
     };
     recorder.onerror = reject;
 

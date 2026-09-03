@@ -4,6 +4,7 @@ import {
   compositeResult,
   maskFromBounds,
 } from "../utils/canvas-utils";
+import { refineMask } from "../utils/mask-ops";
 import type { DetectionRegion } from "../detection/auto-detect";
 
 export interface ProcessImageOptions {
@@ -43,12 +44,14 @@ export async function processImage(
     512
   );
 
+  const refinedMaskFull = refineMask(mask, 12, 8);
+
   // Resize mask to match
   const srcCanvas = document.createElement("canvas");
-  srcCanvas.width = mask.width;
-  srcCanvas.height = mask.height;
+  srcCanvas.width = refinedMaskFull.width;
+  srcCanvas.height = refinedMaskFull.height;
   const srcCtx = srcCanvas.getContext("2d")!;
-  srcCtx.putImageData(mask, 0, 0);
+  srcCtx.putImageData(refinedMaskFull, 0, 0);
 
   const maskCanvas = document.createElement("canvas");
   const modelSize = 512;
@@ -94,7 +97,7 @@ export function createMaskFromRegions(
   regions: DetectionRegion[],
   imageWidth: number,
   imageHeight: number,
-  padding = 10
+  padding = 14
 ): ImageData {
   const bounds = regions.map((r) => ({
     x: r.x,

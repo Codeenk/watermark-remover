@@ -1,8 +1,10 @@
 import { loadModel, runInference, type ModelType } from "../models/onnx-runtime";
 import { downsampleForModel, compositeResult } from "../utils/canvas-utils";
+import { fastInpaint } from "./fast-inpaint";
 
 export interface ProcessVideoOptions {
   modelType: ModelType;
+  fastMode?: boolean;
   timeRange?: { start: number; end: number };
   onProgress?: (stage: string, progress: number) => void;
   onFrameProgress?: (frame: number, total: number) => void;
@@ -14,12 +16,20 @@ export async function processVideo(
   mask: ImageData,
   options: ProcessVideoOptions
 ): Promise<Blob> {
-  const { modelType, timeRange, onProgress, onFrameProgress, cancelToken } =
-    options;
+  const {
+    modelType,
+    fastMode = true,
+    timeRange,
+    onProgress,
+    onFrameProgress,
+    cancelToken,
+  } = options;
 
-  onProgress?.("Loading AI model...", 0);
-  await loadModel(modelType);
-  onProgress?.("AI model ready", 100);
+  if (!fastMode) {
+    onProgress?.("Loading AI model...", 0);
+    await loadModel(modelType);
+    onProgress?.("AI model ready", 100);
+  }
 
   const duration = videoElement.duration;
   const startTime = timeRange?.start ?? 0;
@@ -72,39 +82,33 @@ export async function processVideo(
     if (cancelToken?.cancelled) throw new Error("Processing cancelled");
 
     const frameData = frames[i];
-    const { data: downsampled, scale } = downsampleForModel(frameData, 512);
 
-    // Resize mask
-    const srcCanvas = document.createElement("canvas");
-    srcCanvas.width = mask.width;
-    srcCanvas.height = mask.height;
-    const srcCtx = srcCanvas.getContext("2d")!;
-    srcCtx.putImageData(mask, 0, 0);
-
-    const modelSize = 512;
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = modelSize;
-    maskCanvas.height = modelSize;
-    const maskCtx = maskCanvas.getContext("2d")!;
-    maskCtx.imageSmoothingEnabled = false;
-    maskCtx.drawImage(srcCanvas, 0, 0, modelSize, modelSize);
-    const resizedMask = maskCtx.getImageData(0, 0, modelSize, modelSize);
-
-    const result = await runInference(downsampled, resizedMask, modelType);
-
-    const composited = compositeResult(
-      frameData,
-      result,
-      resizedMask,
-      0,
-      0,
-      scale
-    );
-
-    processedFrames.push(composited);
+    if (fastMode) {
+      const inpainted = fastInpaint(frameData, mask);
+      processedFrames.push(inpainted);
+    } else {
+      const { data: downsampled, scale } = downsampleForModel(frameData, 512);
+      const srcCanvas = document.createElement("canvas");
+      srcCanvas.width = mask.width;
+      srcCanvas.height = mask.height;
+      const srcCtx = srcCanvas.getContext("2d")!;
+      srcCtx.putImageData(mask, 0, 0);
+      const modelSize = 512;
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = modelSize;
+      maskCanvas.height = modelSize;
+      const maskCtx = maskCanvas.getContext("2d")!;
+      maskCtx.imageSmoothingEnabled = false;
+      maskCtx.drawImage(srcCanvas, 0, 0, modelSize, modelSize);
+      const resizedMask = maskCtx.getImageData(0, 0, modelSize, modelSize);
+      const result = await runInference(downsampled, resizedMask, modelType);
+      const composited = compositeResult(frameData, result, resizedMask, 0, 0, scale);
+      processedFrames.push(composited);
+    }
 
     const progress = 10 + (i / frames.length) * 80;
     onProgress?.(`Processing frame ${i + 1}/${frames.length}`, progress);
+    if (i % 10 === 0) await new Promise((r) => setTimeout(r, 0));
   }
 
   onProgress?.("Encoding video...", 95);

@@ -49,6 +49,7 @@ export default function WatermarkRemoverApp() {
   const [detectedRegions, setDetectedRegions] = useState<DetectionRegion[]>([]);
   const [processingProgress, setProcessingProgress] = useState({ stage: "", progress: 0 });
   const [modelType, setModelType] = useState<"lama" | "migan">("migan");
+  const [videoFastMode, setVideoFastMode] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [hasMask, setHasMask] = useState(false);
 
@@ -173,6 +174,7 @@ export default function WatermarkRemoverApp() {
 
         const resultBlob = await processVideo(videoEl, maskData, {
           modelType,
+          fastMode: videoFastMode,
           onProgress: (stage, progress) => {
             setProcessingProgress({ stage, progress });
           },
@@ -200,7 +202,7 @@ export default function WatermarkRemoverApp() {
       alert(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
       setState("edit");
     }
-  }, [image, mediaType, videoSrc, modelType]);
+  }, [image, mediaType, videoSrc, modelType, videoFastMode]);
 
   // Download result
   const handleDownload = useCallback(() => {
@@ -464,6 +466,37 @@ export default function WatermarkRemoverApp() {
 
                 {showSettings && (
                   <div className="mt-4 space-y-3">
+                    {mediaType === "video" && (
+                      <div>
+                        <label className="text-xs text-zinc-500 mb-2 block">
+                          Video Mode
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setVideoFastMode(true)}
+                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
+                              videoFastMode
+                                ? "bg-green-600 text-white"
+                                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                            }`}
+                          >
+                            Fast
+                            <span className="block text-[10px] opacity-60">10-50x realtime</span>
+                          </button>
+                          <button
+                            onClick={() => setVideoFastMode(false)}
+                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${
+                              !videoFastMode
+                                ? "bg-blue-600 text-white"
+                                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                            }`}
+                          >
+                            AI Quality
+                            <span className="block text-[10px] opacity-60">Slower, better</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="text-xs text-zinc-500 mb-2 block">
                         AI Model

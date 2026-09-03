@@ -82,9 +82,30 @@ export async function processVideo(
   if (fastMode) {
     try {
       const mod = await import("./opencv-inpaint");
-      inpaintWithOpenCV = mod.inpaintWithOpenCV;
+      const opencvPromise = mod.inpaintWithOpenCV;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("OpenCV load timeout")), 4000)
+      );
+      await Promise.race([
+        (async () => {
+          const cvMod = await import("./opencv-inpaint");
+          const testCanvas = document.createElement("canvas");
+          testCanvas.width = 4;
+          testCanvas.height = 4;
+          const testImg = testCanvas.getContext("2d")!.getImageData(0, 0, 4, 4);
+          const testMask = testCanvas.getContext("2d")!.getImageData(0, 0, 4, 4);
+          await cvMod.inpaintWithOpenCV(testImg, testMask, "telea", 3);
+        })(),
+        timeoutPromise,
+      ]);
+      inpaintWithOpenCV = opencvPromise;
       onProgress?.("OpenCV ready, processing...", 10);
-    } catch {}
+    } catch {
+      onProgress?.("Using fast Canvas mode...", 10);
+      inpaintWithOpenCV = null;
+    }
+  } else {
+    onProgress?.("Processing frames...", 10);
   }
 
   for (let i = 0; i < frames.length; i++) {

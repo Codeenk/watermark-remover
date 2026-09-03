@@ -2,23 +2,34 @@ let cvReady: Promise<any> | null = null;
 
 function loadOpenCV(): Promise<any> {
   if (cvReady) return cvReady;
-  if (typeof window !== "undefined" && (window as any).cv) {
+  if (typeof window !== "undefined" && (window as any).cv && (window as any).cv.Mat) {
     return Promise.resolve((window as any).cv);
   }
 
   cvReady = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("OpenCV timeout")), 6000);
     const script = document.createElement("script");
-    script.src = "https://docs.opencv.org/4.9.0/opencv.js";
+    script.src = "https://cdn.jsdelivr.net/npm/opencv.js@1.2.1/opencv.js";
     script.async = true;
     script.onload = () => {
       const cv = (window as any).cv;
       if (cv && cv.Mat) {
+        clearTimeout(timeout);
         resolve(cv);
+      } else if (cv) {
+        cv.onRuntimeInitialized = () => {
+          clearTimeout(timeout);
+          resolve(cv);
+        };
       } else {
-        cv.onRuntimeInitialized = () => resolve(cv);
+        clearTimeout(timeout);
+        reject(new Error("OpenCV not found"));
       }
     };
-    script.onerror = () => reject(new Error("Failed to load OpenCV.js"));
+    script.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error("Failed to load OpenCV.js"));
+    };
     document.head.appendChild(script);
   });
 

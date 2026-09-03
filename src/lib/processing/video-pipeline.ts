@@ -84,7 +84,7 @@ export async function processVideo(
       const mod = await import("./opencv-inpaint");
       const opencvPromise = mod.inpaintWithOpenCV;
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("OpenCV load timeout")), 4000)
+        setTimeout(() => reject(new Error("OpenCV load timeout")), 15000)
       );
       await Promise.race([
         (async () => {

@@ -7,9 +7,9 @@ function loadOpenCV(): Promise<any> {
   }
 
   cvReady = new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("OpenCV timeout")), 6000);
+    const timeout = setTimeout(() => reject(new Error("OpenCV timeout")), 15000);
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/opencv.js@1.2.1/opencv.js";
+    script.src = "/opencv.js";
     script.async = true;
     script.onload = () => {
       const cv = (window as any).cv;

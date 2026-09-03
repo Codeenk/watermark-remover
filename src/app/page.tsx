@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { WatermarkDetector, type DetectionRegion } from "@/lib/detection/auto-detect";
 import { processImage, createMaskFromRegions } from "@/lib/processing/image-pipeline";
+import { processVideo } from "@/lib/processing/video-pipeline";
 import { downloadBlob } from "@/lib/utils/file-utils";
 import {
   Paintbrush,
@@ -37,7 +38,10 @@ export default function WatermarkRemoverApp() {
   const [mediaType, setMediaType] = useState<MediaType>("image");
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageSrc, setImageSrc] = useState<string>("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoSrc, setVideoSrc] = useState<string>("");
   const [processedSrc, setProcessedSrc] = useState<string>("");
+  const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [tool, setTool] = useState<Tool>("brush");
   const [brushSize, setBrushSize] = useState(30);
   const [sensitivity, setSensitivity] = useState(0.5);
@@ -49,6 +53,7 @@ export default function WatermarkRemoverApp() {
   const [hasMask, setHasMask] = useState(false);
 
   const maskRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Handle file selection
   const handleFileSelect = useCallback((file: File, type: MediaType) => {
@@ -56,6 +61,8 @@ export default function WatermarkRemoverApp() {
     const url = URL.createObjectURL(file);
 
     if (type === "image") {
+      setVideoFile(null);
+      setVideoSrc("");
       const img = new window.Image();
       img.onload = () => {
         setImage(img);
@@ -64,11 +71,14 @@ export default function WatermarkRemoverApp() {
       };
       img.src = url;
     } else {
-      // For video, create a video element
+      setVideoFile(file);
+      setVideoSrc(url);
       const video = document.createElement("video");
       video.src = url;
+      video.muted = true;
+      video.playsInline = true;
+      videoRef.current = video;
       video.onloadeddata = () => {
-        // Extract first frame as thumbnail
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -77,10 +87,14 @@ export default function WatermarkRemoverApp() {
         const img = new window.Image();
         img.onload = () => {
           setImage(img);
-          setImageSrc(url);
+          setImageSrc(canvas.toDataURL());
           setState("edit");
         };
         img.src = canvas.toDataURL();
+      };
+      video.onerror = () => {
+        setImage(null);
+        setState("upload");
       };
     }
   }, []);
@@ -130,7 +144,7 @@ export default function WatermarkRemoverApp() {
     setHasMask(true);
   }, []);
 
-  // Process image
+  // Process image or video
   const handleProcess = useCallback(async () => {
     if (!image || !maskRef.current) return;
 
@@ -145,41 +159,78 @@ export default function WatermarkRemoverApp() {
         maskRef.current.height
       );
 
-      const resultBlob = await processImage(image, maskData, {
-        modelType,
-        onProgress: (stage, progress) => {
-          setProcessingProgress({ stage, progress });
-        },
-      });
+      if (mediaType === "video" && videoRef.current && videoSrc) {
+        const videoEl = document.createElement("video");
+        videoEl.src = videoSrc;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+        videoEl.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => {
+          videoEl.onloadedmetadata = () => resolve();
+          videoEl.onerror = () => reject(new Error("Failed to load video"));
+          setTimeout(() => reject(new Error("Video load timeout")), 10000);
+        });
 
-      const resultUrl = URL.createObjectURL(resultBlob);
-      setProcessedSrc(resultUrl);
-      setState("done");
+        const resultBlob = await processVideo(videoEl, maskData, {
+          modelType,
+          onProgress: (stage, progress) => {
+            setProcessingProgress({ stage, progress });
+          },
+        });
+
+        const resultUrl = URL.createObjectURL(resultBlob);
+        setProcessedSrc(resultUrl);
+        setProcessedBlob(resultBlob);
+        setState("done");
+      } else {
+        const resultBlob = await processImage(image, maskData, {
+          modelType,
+          onProgress: (stage, progress) => {
+            setProcessingProgress({ stage, progress });
+          },
+        });
+
+        const resultUrl = URL.createObjectURL(resultBlob);
+        setProcessedSrc(resultUrl);
+        setProcessedBlob(resultBlob);
+        setState("done");
+      }
     } catch (err) {
       console.error("Processing failed:", err);
+      alert(`Processing failed: ${err instanceof Error ? err.message : String(err)}`);
       setState("edit");
     }
-  }, [image, modelType]);
+  }, [image, mediaType, videoSrc, modelType]);
 
   // Download result
   const handleDownload = useCallback(() => {
+    if (processedBlob) {
+      const ext = mediaType === "video" ? "webm" : "png";
+      downloadBlob(processedBlob, `watermark-removed-${Date.now()}.${ext}`);
+      return;
+    }
     if (!processedSrc) return;
     fetch(processedSrc)
       .then((r) => r.blob())
       .then((blob) => {
-        downloadBlob(blob, `watermark-removed-${Date.now()}.png`);
+        const ext = mediaType === "video" ? "webm" : "png";
+        downloadBlob(blob, `watermark-removed-${Date.now()}.${ext}`);
       });
-  }, [processedSrc]);
+  }, [processedSrc, processedBlob, mediaType]);
 
   // Reset
   const handleReset = useCallback(() => {
     setState("upload");
     setImage(null);
     setImageSrc("");
+    setVideoFile(null);
+    setVideoSrc("");
     setProcessedSrc("");
+    setProcessedBlob(null);
     setDetectedRegions([]);
     setHasMask(false);
     maskRef.current = null;
+    videoRef.current = null;
   }, []);
 
   return (
@@ -236,14 +287,34 @@ export default function WatermarkRemoverApp() {
             {/* Canvas Area */}
             <div className="relative bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800">
               {state === "done" && processedSrc ? (
-                <div className="p-4">
-                  <ComparisonView
-                    originalSrc={imageSrc}
-                    processedSrc={processedSrc}
-                  />
-                </div>
+                mediaType === "video" ? (
+                  <div className="p-4 flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-zinc-500 mb-2">Original</p>
+                        <video src={videoSrc} controls className="w-full rounded-lg border border-zinc-700" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-500 mb-2">Processed</p>
+                        <video src={processedSrc} controls autoPlay loop className="w-full rounded-lg border border-zinc-700" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    <ComparisonView
+                      originalSrc={imageSrc}
+                      processedSrc={processedSrc}
+                    />
+                  </div>
+                )
               ) : (
                 <div className="aspect-[4/3] relative">
+                  {mediaType === "video" && (
+                    <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-blue-600 rounded text-xs font-medium flex items-center gap-1.5">
+                      <Film className="w-3 h-3" /> Video mode — mask applies to all frames
+                    </div>
+                  )}
                   <CanvasEditor
                     image={image}
                     width={image?.naturalWidth || 800}

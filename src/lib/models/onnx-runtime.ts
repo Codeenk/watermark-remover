@@ -181,12 +181,13 @@ export async function runInference(
     preprocessImage(imageData, inputSize);
   const maskTensor = preprocessMask(maskData, inputSize);
 
-  // Run inference
   const feeds: Record<string, ort.Tensor> = {};
-
-  if (modelType === "lama") {
-    feeds["image"] = imageTensor;
-    feeds["mask"] = maskTensor;
+  const inputNames: string[] = (sess as any).inputNames || [];
+  if (inputNames.length >= 2) {
+    feeds[inputNames[0]] = imageTensor;
+    feeds[inputNames[1]] = maskTensor;
+  } else if (inputNames.length === 1) {
+    feeds[inputNames[0]] = imageTensor;
   } else {
     feeds["image"] = imageTensor;
     feeds["mask"] = maskTensor;

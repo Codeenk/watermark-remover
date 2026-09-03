@@ -572,19 +572,19 @@ export default function WatermarkRemoverApp() {
                   {mediaType === "video" ? (
                     <>
                       <button
-                        onClick={() => handleDownload(false)}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-500/20"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download WebM
-                      </button>
-                      <button
                         onClick={() => handleDownload(true)}
                         disabled={isConverting}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 rounded-xl text-sm font-medium text-zinc-300 transition-colors border border-zinc-700"
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-50 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-500/20"
                       >
-                        {isConverting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
-                        {isConverting ? "Converting..." : "Download MP4"}
+                        {isConverting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {isConverting ? "Converting to MP4..." : "Download MP4"}
+                      </button>
+                      <button
+                        onClick={() => handleDownload(false)}
+                        disabled={isConverting}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 rounded-lg text-xs font-medium text-zinc-400 transition-colors"
+                      >
+                        Download WebM (faster)
                       </button>
                     </>
                   ) : (

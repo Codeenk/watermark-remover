@@ -49,6 +49,7 @@ export default function WatermarkRemoverApp() {
   const [detectedRegions, setDetectedRegions] = useState<DetectionRegion[]>([]);
   const [processingProgress, setProcessingProgress] = useState({ stage: "", progress: 0 });
   const [modelType, setModelType] = useState<"lama" | "migan">("migan");
+  const [imageMethod, setImageMethod] = useState<"ai" | "telea" | "fast">("ai");
   const [videoFastMode, setVideoFastMode] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [hasMask, setHasMask] = useState(false);
@@ -106,8 +107,31 @@ export default function WatermarkRemoverApp() {
     setIsAutoDetecting(true);
 
     try {
+      let regions: DetectionRegion[] = [];
+      try {
+        const { predictMaskTinyUNet } = await import("@/lib/detection/tinyunet");
+        const tinyMask = await predictMaskTinyUNet(image);
+        if (tinyMask) {
+          let hasWatermark = false;
+          for (let i = 0; i < tinyMask.data.length; i += 4) {
+            if (tinyMask.data[i] > 128) { hasWatermark = true; break; }
+          }
+          if (hasWatermark) {
+            const canvas = document.createElement("canvas");
+            canvas.width = tinyMask.width;
+            canvas.height = tinyMask.height;
+            canvas.getContext("2d")!.putImageData(tinyMask, 0, 0);
+            maskRef.current = canvas;
+            setHasMask(true);
+            setDetectedRegions([{ x: 0, y: 0, width: tinyMask.width, height: tinyMask.height, confidence: 0.9, type: "logo" }]);
+            setIsAutoDetecting(false);
+            return;
+          }
+        }
+      } catch {}
+
       const detector = new WatermarkDetector();
-      const regions = await detector.detect(image, {
+      regions = await detector.detect(image, {
         sensitivity,
         types: ["text", "logo", "overlay", "tiled"],
         minRegionSize: 20,
@@ -185,8 +209,10 @@ export default function WatermarkRemoverApp() {
         setProcessedBlob(resultBlob);
         setState("done");
       } else {
+        const inpaintMethod = imageMethod === "telea" ? "telea" : imageMethod === "fast" ? "fast" : undefined;
         const resultBlob = await processImage(image, maskData, {
           modelType,
+          inpaintMethod: inpaintMethod as any,
           onProgress: (stage, progress) => {
             setProcessingProgress({ stage, progress });
           },
@@ -515,6 +541,48 @@ export default function WatermarkRemoverApp() {
                     )}
                     <div>
                       <label className="text-xs text-zinc-500 mb-2 block">
+                        Image Inpaint
+                      </label>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          onClick={() => setImageMethod("ai")}
+                          className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${imageMethod === "ai" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                        >
+                          AI
+                          <span className="block text-[10px] opacity-60">MI-GAN/LaMa</span>
+                        </button>
+                        <button
+                          onClick={() => setImageMethod("telea")}
+                          className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${imageMethod === "telea" ? "bg-green-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                        >
+                          Telea
+                          <span className="block text-[10px] opacity-60">Fast 8MB</span>
+                        </button>
+                        <button
+                          onClick={() => setImageMethod("fast")}
+                          className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${imageMethod === "fast" ? "bg-green-600 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                        >
+                          Fast
+                          <span className="block text-[10px] opacity-60">Instant</span>
+                        </button>
+                      </div>
+                      {imageMethod === "ai" && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setModelType("migan")}
+                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${modelType === "migan" ? "bg-zinc-700 text-white border border-blue-500" : "bg-zinc-800 text-zinc-500"}`}
+                          >
+                            MI-GAN
+                          </button>
+                          <button
+                            onClick={() => setModelType("lama")}
+                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${modelType === "lama" ? "bg-zinc-700 text-white border border-blue-500" : "bg-zinc-800 text-zinc-500"}`}
+                          >
+                            LaMa HQ
+                          </button>
+                        </div>
+                      )}
+                      <label className="text-xs text-zinc-500 mb-2 block mt-3">
                         AI Model
                       </label>
                       <div className="flex gap-2">

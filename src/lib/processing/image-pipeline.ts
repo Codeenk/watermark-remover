@@ -7,8 +7,11 @@ import {
 import { refineMask } from "../utils/mask-ops";
 import type { DetectionRegion } from "../detection/auto-detect";
 
+export type InpaintMethod = "lama" | "migan" | "telea" | "fast";
+
 export interface ProcessImageOptions {
   modelType: ModelType;
+  inpaintMethod?: InpaintMethod;
   onProgress?: (stage: string, progress: number) => void;
 }
 
@@ -17,7 +20,38 @@ export async function processImage(
   mask: ImageData,
   options: ProcessImageOptions
 ): Promise<Blob> {
-  const { modelType, onProgress } = options;
+  const { modelType, inpaintMethod, onProgress } = options;
+  const method = inpaintMethod || (modelType === "migan" ? "migan" : "lama");
+
+  if (method === "telea" || method === "fast") {
+    onProgress?.("Preparing image...", 20);
+    const origCanvas = document.createElement("canvas");
+    origCanvas.width = imageSource.naturalWidth;
+    origCanvas.height = imageSource.naturalHeight;
+    const origCtx = origCanvas.getContext("2d")!;
+    origCtx.drawImage(imageSource, 0, 0);
+    const originalImageData = origCtx.getImageData(0, 0, origCanvas.width, origCanvas.height);
+    const refined = refineMask(mask, 12, 8);
+    let inpainted: ImageData;
+    if (method === "telea") {
+      const { inpaintWithOpenCV } = await import("./opencv-inpaint");
+      onProgress?.("Running OpenCV Telea...", 40);
+      inpainted = await inpaintWithOpenCV(originalImageData, refined, "telea", 7);
+    } else {
+      const { fastInpaint } = await import("./fast-inpaint");
+      onProgress?.("Running fast inpaint...", 40);
+      inpainted = fastInpaint(originalImageData, refined);
+    }
+    onProgress?.("Encoding output...", 95);
+    const outCanvas = document.createElement("canvas");
+    outCanvas.width = inpainted.width;
+    outCanvas.height = inpainted.height;
+    const outCtx = outCanvas.getContext("2d")!;
+    outCtx.putImageData(inpainted, 0, 0);
+    return new Promise((resolve) => {
+      outCanvas.toBlob((blob) => resolve(blob!), "image/png", 1);
+    });
+  }
 
   onProgress?.("Loading AI model...", 0);
   await loadModel(modelType);

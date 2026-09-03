@@ -84,8 +84,14 @@ export async function processVideo(
     const frameData = frames[i];
 
     if (fastMode) {
-      const inpainted = fastInpaint(frameData, mask);
-      processedFrames.push(inpainted);
+      try {
+        const { inpaintWithOpenCV } = await import("./opencv-inpaint");
+        const inpainted = await inpaintWithOpenCV(frameData, mask, "telea", 7);
+        processedFrames.push(inpainted);
+      } catch {
+        const inpainted = fastInpaint(frameData, mask);
+        processedFrames.push(inpainted);
+      }
     } else {
       const { data: downsampled, scale } = downsampleForModel(frameData, 512);
       const srcCanvas = document.createElement("canvas");
